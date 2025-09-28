@@ -1,0 +1,353 @@
+---
+title: "Análisis del guión de GTA San Andreas"
+author: "Germán Cuesta, Andrés Linero, Alejandro Picón"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  warning = FALSE, 
+  message = FALSE,
+  fig.width = 12,  # Aumenta el ancho de todas las figuras
+  fig.height = 10,  # Aumenta el alto de todas las figuras
+  out.width = "100%"  # Hace que las figuras ocupen el ancho completo
+)
+```
+
+## Configuración inicial
+
+```{r libraries}
+# Cargar librerías necesarias
+library(reader)
+library(tidyverse)
+library(tidytext)
+library(magrittr)
+library(gridExtra)
+library(wordcloud)
+library(boot)
+library(RColorBrewer)
+library(reshape2)
+library(igraph)
+```
+
+## Análisis de frecuencia de palabras
+
+### Palabras más frecuentes
+```{r word-frequency}
+# Cargar y procesar datos
+gta_script <- read_lines("guionGTA.txt")
+gta_script <- tibble(
+  line = seq_along(gta_script),
+  text = gta_script
+) %>%
+  unnest_tokens(input = text, output = word) %>%
+  filter(!is.na(word)) %>%
+  filter(!grepl(pattern = "[0-9]", x = word))
+
+# Remover stop words mientras se preservan nombres de personajes
+character_names <- c("CJ", "CARL", "SWEET", "RYDER", "BIG", "SMOKE", "CESAR", 
+                    "KENDL", "WOOZIE", "CATALINA", "TENPENNY", "PULASKI", 
+                    "ZERO", "TRUTH", "TORENO", "MADD", "DOGG")
+
+character_names_lower <- tolower(character_names)
+filtered_stop_words <- stop_words %>%
+  filter(!word %in% character_names_lower)
+
+gta_script %<>%
+  anti_join(x = ., y = filtered_stop_words)
+
+# Visualización de palabras más frecuentes
+gta_script %>%
+  count(word, sort = TRUE) %>%
+  filter(n >= 100) %>%
+  mutate(word = reorder(word, n)) %>% 
+  ggplot(aes(x = word, y = n)) + 
+  geom_col(fill="#335f3f", alpha = 0.8) +
+  theme_light() +
+  coord_flip() +
+  xlab(NULL) +
+  ylab("Frecuencia") +
+  ggtitle("GTA SA: Conteo de Palabras")
+```
+
+### Nube de palabras
+```{r wordcloud, fig.height=12, fig.width=16, out.width="100%"}
+par(mfrow = c(1,1), mar=c(2,2,4,2), mgp=c(2,1,0))
+set.seed(123)
+gta_script %>%
+  count(word, sort = TRUE) %>%
+  with(wordcloud(
+    words = word,
+    freq = n,
+    max.words = 50,
+    colors = "#335f3f",
+    scale = c(5, 3),  # Aumenta el contraste de tamaños
+    min.freq = 2,       # Establece frecuencia mínima
+    rot.per = 0.35,     # 35% de palabras rotadas
+    random.order = FALSE # Palabras más frecuentes en el centro
+  ))
+title(main = "Nube de Palabras - GTA SA", cex.main = 2)
+```
+
+## Análisis de Frecuencia por Personajes y Correlaciones
+
+### Frecuencia de palabras por personaje
+```{r character-frequency}
+# Función para identificar personajes principales
+get_main_characters <- function(word){
+  word_upper <- toupper(word)
+  case_when(
+    word_upper %in% c("CJ", "CARL") ~ "cj",
+    word_upper == "SWEET" ~ "sweet",
+    word_upper == "RYDER" ~ "ryder",
+    word_upper == "CESAR" ~ "cesar",
+    word_upper == "BIG" ~ "big_smoke",  
+    word_upper == "SMOKE" ~ "big_smoke",
+    TRUE ~ NA_character_
+  )
+}
+
+# Procesar el script para obtener diálogos por personaje
+script_with_characters <- gta_script %>%
+  mutate(
+    is_character = !is.na(get_main_characters(word)),
+    character = get_main_characters(word)
+  ) %>%
+  fill(character, .direction = "down") %>%
+  filter(!is_character, !is.na(character)) %>%
+  select(word, character)
+
+# Crear datasets por personaje
+create_character_dataset <- function(character_name){
+  script_with_characters %>% 
+    filter(character == character_name) %>%
+    select(word)
+}
+
+script_cj <- create_character_dataset("cj")
+script_sweet <- create_character_dataset("sweet")
+script_ryder <- create_character_dataset("ryder")
+script_cesar <- create_character_dataset("cesar")
+script_big_smoke <- create_character_dataset("big_smoke")
+
+# Mostrar conteo de palabras por personaje
+cat("Palabras por personaje:\n")
+script_with_characters %>%
+  count(character, sort = TRUE) %>%
+  knitr::kable()
+
+# Crear tabla de frecuencias relativas
+bind_rows(
+  mutate(.data = script_cj, author = "cj"),
+  mutate(.data = script_sweet, author = "sweet")
+) %>%
+  count(author, word) %>%
+  group_by(author) %>%
+  mutate(proportion = n / sum(n)) %>%
+  select(-n) %>%
+  spread(author, proportion, fill = 0) -> word_frequencies
+
+# Mostrar palabras más frecuentes compartidas
+word_frequencies %>%
+  filter(cj != 0, sweet != 0) %>%
+  arrange(desc(cj), desc(sweet)) %>%
+  head(10) %>%
+  knitr::kable(caption = "Top 10 palabras compartidas entre CJ y Sweet")
+```
+
+### Análisis de Correlaciones
+```{r correlations}
+# Correlación sobre todo el vocabulario
+cor_all <- cor.test(x=word_frequencies$sweet, y=word_frequencies$cj)
+cat("Correlación sobre todo el vocabulario:\n")
+print(cor_all)
+
+# Correlación basada solo en palabras compartidas
+shared_words <- word_frequencies %>%
+  filter(cj != 0, sweet != 0)
+cor_shared <- cor.test(x=shared_words$sweet, y=shared_words$cj)
+cat("\nCorrelación basada en palabras compartidas:\n")
+print(cor_shared)
+```
+
+### Análisis Bootstrap
+```{r bootstrap, fig.height=8, fig.width=12, out.width="100%"}
+# Bootstrap para la relación entre frecuencias relativas
+
+suppressMessages(suppressWarnings(library(boot)))
+
+correlation_function <- function(data, indices){
+  d <- data[indices, ]
+  return(cor(d$sweet,d$cj))
+}
+
+correlation_data <- word_frequencies %>%
+  select(sweet, cj)
+
+set.seed(123)
+bootstrap_correlation <- boot(data = correlation_data, statistic = correlation_function, R=2000)
+boot.ci(bootstrap_correlation,  type = "perc")
+
+hist (bootstrap_correlation$t,
+      main="Bootstrap Correlation Distribution",
+      xlab="r",
+      col = "#039BE5",
+      border = "white")
+
+
+#bootstrap analysis for the correlation of shared words
+
+shared_correlation_function <- function(data, indices){
+  d <- data[indices, ]
+  return(cor(d$sweet, d$cj))
+}
+shared_correlation_data <- shared_words %>%
+  select(sweet, cj)
+
+set.seed(123)
+bootstrap_shared_correlation <- boot(data = shared_correlation_data, statistic = shared_correlation_function, R = 2000)
+boot.ci(bootstrap_shared_correlation, type = "perc")
+
+hist(bootstrap_shared_correlation$t,
+     main = "Bootstrap Distribution (shared words)",
+     xlab ="r",
+     col ="#039BE5",
+     border ="white")
+```
+
+
+## Análisis de Sentimientos
+
+### Palabras con carga emocional
+```{r sentiment-analysis}
+# Análisis de sentimientos
+positive_words <- get_sentiments("bing") %>%
+  filter(sentiment == "positive") %>%
+  mutate(sentiment = "Positive")
+negative_words <- get_sentiments("bing") %>%
+  filter(sentiment == "negative") %>%
+  mutate(sentiment = "Negative")
+
+sentiment_words <- bind_rows(positive_words, negative_words)
+
+# Visualización de palabras emocionalmente cargadas
+gta_script %>%
+  inner_join(sentiment_words) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  filter(n > 8) %>%
+  mutate(n = ifelse(sentiment == "Negative", -n, n)) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(x = word, y=n, fill = sentiment)) +
+  geom_col() +
+  scale_fill_manual(values = brewer.pal(8,"Dark2")[c(2,5)]) +
+  coord_flip(ylim=c(-7,7)) +
+  labs(
+    title = "GTA SA: Conteo de Sentimientos",
+    y = "Frecuencia",
+    x = NULL
+  ) +
+  theme_minimal()
+```
+
+### Nube de palabras por sentimiento
+```{r sentiment-wordcloud, fig.height=12, fig.width=16, out.width="100%"}
+par(mfrow = c(1,1), mar = c(2,2,4,2), mgp = c(2,1,0))
+set.seed(123)
+gta_script %>%
+  inner_join(sentiment_words) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(
+    colors = brewer.pal(8, "Dark2")[c(2, 5)],
+    max.words = 50,
+    title.size = 2.5,    # Título más grande
+    scale = c(4, 3),   # Mayor contraste de tamaños
+    rot.per = 0.35,      # 35% de palabras rotadas
+    random.order = FALSE  # Palabras más frecuentes en el centro
+  )
+title("Análisis de Sentimientos - GTA SA", cex.main = 2)
+```
+
+## Análisis de Red de Palabras
+
+### Red de bigramas
+```{r bigram-network}
+# Procesamiento de bigramas
+gta_raw_script <- read_lines("guionGTA.txt")
+gta_raw_script <- tibble(
+  line = 1:length(gta_raw_script),
+  text = gta_raw_script
+)
+
+gta_script_bigrams <- gta_raw_script %>%
+  unnest_tokens(input = text, output = bigram, token = "ngrams", n = 2) %>%
+  filter(!is.na(bigram))
+
+# Crear red de bigramas
+replacement_list <- list(
+  'á' = 'a',
+  'é' = 'e',
+  'í' = 'i',
+  'ó' = 'o',
+  'ú' = 'u'
+)
+
+gta_bigram_counts <- gta_script_bigrams %>%
+  separate(bigram, c("word1", "word2"), sep = " ") %>%
+  filter(!grepl(pattern = '[0-9]', x = word1)) %>%
+  filter(!grepl(pattern = '[0-9]', x = word2)) %>%
+  filter(!word1 %in% stop_words$word) %>%
+  filter(!word2 %in% stop_words$word) %>%
+  mutate(word1 = chartr(
+    old = names(replacement_list) %>% str_c(collapse = ''),
+    new = replacement_list %>% str_c(collapse = ''),
+    x = word1)) %>%
+  mutate(word2 = chartr(
+    old = names(replacement_list) %>% str_c(collapse = ''),
+    new = replacement_list %>% str_c(collapse = ''),
+    x = word2)) %>%
+  filter(!is.na(word1)) %>%
+  filter(!is.na(word2)) %>%
+  count(word1, word2, sort = TRUE) %>%
+  rename(weight = n)
+
+# Visualizar red con umbral alto
+g <- gta_bigram_counts %>%
+  filter(weight > 16) %>%
+  graph_from_data_frame(directed = FALSE)
+
+set.seed(123)
+plot(
+  g,
+  layout = layout_with_fr,
+  vertex.color = 1,
+  vertex.frame.color = 1,
+  vertex.size = 3,
+  vertex.label.color = "black",
+  vertex.label.cex = 1,
+  vertex.label.dist = 1,
+  main = "Red de palabras (Umbral = 16)"
+)
+
+# Visualizar red con umbral bajo
+g <- gta_bigram_counts %>%
+  filter(weight > 2) %>%
+  graph_from_data_frame(directed = FALSE)
+
+set.seed(123)
+plot(
+  g,
+  layout = layout_with_kk,      
+  vertex.color = 1,
+  vertex.frame.color = 1,
+  vertex.size = 3,
+  vertex.label = NA,            
+  main = "Red de palabras (Umbral = 2)"           
+)
+```
