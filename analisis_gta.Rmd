@@ -9,6 +9,10 @@ output:
     theme: united
 ---
 
+> **Repositorio del proyecto:** https://github.com/Gjaset/Natural-Language-Processing-applied-to-the-GTA-San-Andreas-script
+
+> **Referencias guión:** https://gamefaqs.gamespot.com/ps2/914983-grand-theft-auto-san-andreas/faqs/36175
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
   echo = TRUE, 
@@ -19,8 +23,38 @@ knitr::opts_chunk$set(
   out.width = "100%"  # Hace que las figuras ocupen el ancho completo
 )
 ```
+## Introducción 
+
+El análisis de frecuencia de palabras en un corpus textual, como los diálogos y guiones de GTA: San Andreas, permite observar patrones lingüísticos que reflejan tanto el diseño narrativo del juego como la construcción de sus personajes y escenarios. 
+
+Más allá de la simple aparición de términos, el estudio de sus conexiones ofrece una ventana para comprender qué conceptos se relacionan entre sí, revelando conexiones semánticas y temáticas que fortalecen la ambientación y el mensaje narrativo. 
+
+En este contexto, el uso de técnicas estadísticas y de conteo sistemático brinda una forma objetiva de explorar un universo cultural y narrativo tan amplio como el de este videojuego. 
+
+
+### Justificación 
+
+El análisis de texto aplicado a GTA: San Andreas resulta relevante porque permite transformar un producto de entretenimiento en un objeto de investigación cuantitativa. 
+
+Mientras que la experiencia del jugador se centra en lo narrativo y lo visual, el estudio de la frecuencia y correlación de palabras ofrece una visión estructurada y replicable del trasfondo lingüístico del juego. 
+
+Además, este enfoque no requiere herramientas de inteligencia artificial complejas: con técnicas de conteo, minería de texto y análisis de redes, es posible generar evidencia empírica clara y accesible que enriquezca la interpretación del guion del juego. 
+
+
+### Objetivos
+
+- Detectar y cuantificar la frecuencia de términos clave dentro del corpus textual de GTA: San Andreas. 
+
+- Identificar relaciones entre palabras para revelar patrones narrativos y temáticos. 
+
+- Presentar los resultados mediante gráficos y visualizaciones que faciliten la interpretación de los datos. 
+
 
 ## Configuración inicial
+
+Antes de realizar cualquier análisis, fue necesario preparar y estructurar el corpus textual de GTA: San Andreas. Este proceso incluyó la recopilación de diálogos y guiones, su normalización—eliminación de símbolos, corrección de formatos y estandarización de mayúsculas/minúsculas—y la segmentación en palabras individuales. 
+
+La configuración inicial garantiza que los datos estén limpios y organizados, permitiendo que las técnicas posteriores de conteo y análisis se apliquen de manera consistente y confiable. 
 
 ```{r libraries}
 # Cargar librerías necesarias
@@ -37,6 +71,13 @@ library(igraph)
 ```
 
 ## Análisis de frecuencia de palabras
+
+El análisis de frecuencia consiste en identificar cuántas veces aparece un término específico dentro del corpus. 
+
+Esta técnica, aunque sencilla, constituye la base para estudios más complejos, pues permite reconocer cuáles son los temas, personajes o conceptos más recurrentes en el guion del videojuego. 
+
+En este proyecto, la frecuencia de palabras no se limita a un conteo aislado, sino que también se contrasta con correlaciones entre términos. Esto ofrece una visión más profunda sobre cómo se conectan las ideas y narrativas dentro de GTA: San Andreas. 
+
 
 ### Palabras más frecuentes
 ```{r word-frequency}
@@ -76,6 +117,11 @@ gta_script %>%
   ggtitle("GTA SA: Conteo de Palabras")
 ```
 
+El conteo de palabras por personaje permite observar qué tan central es cada figura dentro de la narrativa del juego. Analizar el vocabulario individual muestra diferencias en estilo, frecuencia de aparición y relevancia dentro de la historia. 
+
+Cuando se analizan las palabras usadas por cada personaje, aparecen diferencias claras en el estilo y en el rol que cumplen dentro de la historia. Por ejemplo, personajes principales como CJ tienden a tener un vocabulario amplio y relacionado con la acción directa, mientras que otros personajes pueden centrarse en temas más específicos, como negocios, violencia o familia. Este análisis muestra cómo cada voz dentro del juego refuerza su identidad y aporta a la construcción general de la trama. 
+
+
 ### Nube de palabras
 ```{r wordcloud, fig.height=12, fig.width=16, out.width="100%"}
 par(mfrow = c(1,1), mar=c(2,2,4,2), mgp=c(2,1,0))
@@ -94,6 +140,8 @@ gta_script %>%
   ))
 title(main = "Nube de Palabras - GTA SA", cex.main = 2)
 ```
+La nube de palabras ofrece una forma visual de entender esas frecuencias: los términos más importantes aparecen en un tamaño mayor. En el contexto de GTA: San Andreas, esta representación permite ver rápidamente qué conceptos dominan las conversaciones, como referencias a homie, Cj, Casino o a las misiones. Así, la nube de palabras no solo resume el conteo, sino que también ayuda a identificar de un vistazo los ejes narrativos más repetidos en el juego.
+
 
 ## Análisis de Frecuencia por Personajes y Correlaciones
 
@@ -176,7 +224,7 @@ cat("\nCorrelación basada en palabras compartidas:\n")
 print(cor_shared)
 ```
 
-### Análisis Bootstrap
+### Correlaciones 
 ```{r bootstrap, fig.height=8, fig.width=12, out.width="100%"}
 # Bootstrap para la relación entre frecuencias relativas
 
@@ -221,6 +269,10 @@ hist(bootstrap_shared_correlation$t,
      border ="white")
 ```
 
+El análisis con bootstrap consiste en aplicar técnicas de remuestreo para comprobar la estabilidad de los resultados. De esta manera se asegura que las correlaciones encontradas entre palabras no sean producto del azar, sino que reflejen patrones consistentes en el corpus. 
+
+En el caso de GTA: San Andreas, esta técnica confirma que ciertas asociaciones —por ejemplo, entre violencia y dinero, o drogas y pandillas— son consistentes y representan temas estructurales del guion, no resultados accidentales. 
+
 
 ## Análisis de Sentimientos
 
@@ -255,6 +307,10 @@ gta_script %>%
   theme_minimal()
 ```
 
+El análisis de sentimientos mediante conteo clasifica las palabras según su carga positiva, negativa o neutral. Este procedimiento ayuda a medir el tono general de los diálogos y a identificar escenas con mayor carga emocional. 
+
+En GTA: San Andreas, predominan las palabras negativas, lo cual refleja el tono conflictivo y violento de la historia. Sin embargo, también aparecen expresiones más neutrales o positivas en momentos de diálogo familiar o de camaradería, lo que da un contraste interesante en la narrativa del juego. 
+
 ### Nube de palabras por sentimiento
 ```{r sentiment-wordcloud, fig.height=12, fig.width=16, out.width="100%"}
 par(mfrow = c(1,1), mar = c(2,2,4,2), mgp = c(2,1,0))
@@ -273,6 +329,8 @@ gta_script %>%
   )
 title("Análisis de Sentimientos - GTA SA", cex.main = 2)
 ```
+La nube de sentimientos representa visualmente las palabras positivas y negativas más frecuentes. Esta herramienta permite observar de forma rápida la distribución de emociones dentro del juego y facilita la comparación entre diferentes tipos de vocabulario. 
+
 
 ## Análisis de Red de Palabras
 
@@ -335,6 +393,13 @@ plot(
   main = "Red de palabras (Umbral = 16)"
 )
 
+```
+La red de palabras con un umbral alto (16) muestra únicamente las conexiones más fuertes entre términos. Esto permite identificar grupos temáticos claros y relaciones sólidas dentro del discurso, ofreciendo una visión concentrada de los patrones lingüísticos. 
+
+En GTA: San Andreas, estas conexiones muestran grupos temáticos bien definidos, como la relación entre drogas y violencia, o entre dinero y poder. Este nivel de análisis ayuda a identificar los núcleos centrales del discurso, es decir, las ideas que sostienen la historia y que aparecen constantemente vinculadas entre sí.
+
+```{r}
+
 # Visualizar red con umbral bajo
 g <- gta_bigram_counts %>%
   filter(weight > 2) %>%
@@ -351,3 +416,11 @@ plot(
   main = "Red de palabras (Umbral = 2)"           
 )
 ```
+
+La red de palabras con un umbral bajo (2) incluye muchas más conexiones, lo que permite observar asociaciones más amplias entre términos. Aunque puede contener más ruido, esta representación revela una visión más completa de las posibles relaciones en el lenguaje del juego. 
+
+En este caso, el gráfico refleja un panorama más amplio de las asociaciones posibles, mostrando cómo los diferentes temas del juego —como familia, pandillas, policía o negocios— terminan entrelazándose. Aunque aparecen más relaciones débiles, esta perspectiva ayuda a comprender la complejidad del guion y cómo múltiples conceptos se conectan en la narrativa de GTA: San Andreas. 
+
+
+## Conclusión 
+El conjunto de análisis presentados permite comprender de manera más profunda el lenguaje y los temas que estructuran GTA: San Andreas. Desde la frecuencia de palabras hasta las redes de asociaciones, los resultados muestran cómo la narrativa se construye alrededor de la violencia, las pandillas, el dinero y el poder, pero también incorpora elementos de familia, amistad y pertenencia. Estas técnicas no solo evidencian los patrones del guion, sino que también ofrecen una mirada crítica sobre el trasfondo social y cultural que inspira la historia del juego.
