@@ -7,6 +7,8 @@ output:
     toc: true
     toc_float: true
     theme: united
+    code_folding: show
+    df_print: paged
 ---
 
 > **Repositorio del proyecto:** https://github.com/Gjaset/Natural-Language-Processing-applied-to-the-GTA-San-Andreas-script
@@ -20,7 +22,8 @@ knitr::opts_chunk$set(
   message = FALSE,
   fig.width = 12,  # Aumenta el ancho de todas las figuras
   fig.height = 10,  # Aumenta el alto de todas las figuras
-  out.width = "100%"  # Hace que las figuras ocupen el ancho completo
+  out.width = "100%",  # Hace que las figuras ocupen el ancho completo
+  fig.path = "analisis_gta_files/figure-html/"
 )
 ```
 ## Introducción 
@@ -50,6 +53,70 @@ Además, este enfoque no requiere herramientas de inteligencia artificial comple
 - Presentar los resultados mediante gráficos y visualizaciones que faciliten la interpretación de los datos. 
 
 
+## Personajes Principales
+
+A continuación se presentan los personajes principales de GTA San Andreas que serán analizados a lo largo de este estudio. Estos personajes fueron seleccionados por su relevancia narrativa y frecuencia de aparición en el guion del juego.
+
+```{r character-gallery, echo=FALSE}
+library(htmltools)
+
+# Definir información de personajes con imágenes
+characters_info <- data.frame(
+  name = c("CJ", "SWEET", "BIG SMOKE", "RYDER", "KENDL", "CESAR", 
+           "CATALINA", "WOOZIE", "TENPENNY", "PULASKI", "TRUTH", 
+           "TORENO", "MADD DOGG", "ZERO"),
+  full_name = c("Carl Johnson", "Sweet Johnson", "Big Smoke", "Ryder", 
+                "Kendl Johnson", "Cesar Vialpando", "Catalina", "Wu Zi Mu", 
+                "Officer Tenpenny", "Officer Pulaski", "The Truth", 
+                "Mike Toreno", "Madd Dogg", "Zero"),
+  role = c("Protagonista", "Hermano de CJ", "Traidor", "Miembro Grove Street", 
+           "Hermana de CJ", "Novio de Kendl", "Ex-novia de CJ", "Líder de las Tríadas", 
+           "Policía corrupto", "Policía corrupto", "Hippie traficante", 
+           "Agente secreto", "Rapero", "Técnico"),
+  image = c("images/characters/cj.png", "images/characters/sweet.webp", 
+            "images/characters/BigSmoke.jpg", "images/characters/ryder.webp",
+            "images/characters/Kendl.webp", "images/characters/cesar.webp",
+            "images/characters/Catalina.webp", "images/characters/Woozie.webp",
+            "images/characters/Tenpenny.webp", "images/characters/Pulaski.webp",
+            "images/characters/Truth.webp", "images/characters/Toreno.webp",
+            "images/characters/MaddDogg.webp", "images/characters/Zero.webp"),
+  stringsAsFactors = FALSE
+)
+
+# Crear cards para cada personaje
+character_cards <- lapply(1:nrow(characters_info), function(i) {
+  tags$div(
+    style = "text-align: center; padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: transform 0.2s;",
+    tags$img(
+      src = characters_info$image[i],
+      alt = characters_info$full_name[i],
+      style = "width: 120px; height: 120px; margin: 0 auto 10px; border-radius: 50%; object-fit: cover; border: 3px solid #667eea; box-shadow: 0 4px 6px rgba(0,0,0,0.2);"
+    ),
+    tags$div(
+      style = "font-weight: bold; font-size: 14px; color: #333; margin-bottom: 5px;",
+      characters_info$name[i]
+    ),
+    tags$div(
+      style = "font-size: 12px; color: #666; margin-bottom: 3px;",
+      characters_info$full_name[i]
+    ),
+    tags$div(
+      style = "font-size: 11px; color: #999; font-style: italic;",
+      characters_info$role[i]
+    )
+  )
+})
+
+# Crear galería con grid
+gallery <- tags$div(
+  style = "display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; margin: 30px 0; padding: 20px; background-color: #f8f9fa; border-radius: 10px;",
+  character_cards
+)
+
+gallery
+```
+
+
 ## Configuración inicial
 
 Antes de realizar cualquier análisis, fue necesario preparar y estructurar el corpus textual de GTA: San Andreas. Este proceso incluyó la recopilación de diálogos y guiones, su normalización—eliminación de símbolos, corrección de formatos y estandarización de mayúsculas/minúsculas—y la segmentación en palabras individuales. 
@@ -68,6 +135,45 @@ library(boot)
 library(RColorBrewer)
 library(reshape2)
 library(igraph)
+library(purrr)
+library(networkD3)
+library(kableExtra)
+
+cat("Inicializando entorno de análisis GTA San Andreas...\n")
+```
+
+```{r data-prep}
+# Lectura y tokenización base
+gta_script <- read_lines("guionGTA.txt") %>% unlist()
+gta_script <- tibble(line = seq_along(gta_script), text = gta_script) %>%
+  unnest_tokens(input = text, output = word) %>%
+  filter(!is.na(word)) %>%
+  filter(!grepl(pattern = "[0-9]", x = word))
+
+# Nombres de personajes a preservar
+character_names <- c("CJ", "CARL", "SWEET", "RYDER", "BIG SMOKE", "CESAR", 
+                     "KENDL", "WOOZIE", "CATALINA", "TENPENNY", "PULASKI", 
+                     "ZERO", "TRUTH", "TORENO", "MADD", "DOGG")
+character_names_lower <- tolower(character_names)
+data(stop_words)
+filtered_stop_words <- stop_words %>% filter(!word %in% character_names_lower)
+gta_script %<>% anti_join(filtered_stop_words, by = "word")
+
+# Filtrado ofensivo (NRC + AFINN) excluyendo personajes
+nrc_negative <- get_sentiments("nrc") %>%
+  filter(sentiment %in% c("anger", "disgust", "fear")) %>% select(word)
+afinn_negative <- get_sentiments("afinn") %>%
+  filter(value <= -3) %>% select(word)
+offensive_words <- bind_rows(nrc_negative, afinn_negative) %>% distinct(word) %>%
+  filter(!tolower(word) %in% tolower(character_names))
+cat("Tokens antes filtrado ofensivo:", nrow(gta_script), "\n")
+gta_script %<>% anti_join(offensive_words, by = "word")
+cat("Tokens después filtrado ofensivo:", nrow(gta_script), "\n")
+
+# Frecuencias rápidas
+top_words <- gta_script %>% count(word, sort = TRUE) %>% head(10)
+knitr::kable(top_words, caption = "Top 10 palabras tras preparación y filtrado")
+```
 ```
 
 ## Análisis de frecuencia de palabras
@@ -92,9 +198,9 @@ gta_script <- tibble(
   filter(!grepl(pattern = "[0-9]", x = word))
 
 # Remover stop words mientras se preservan nombres de personajes
-character_names <- c("CJ", "CARL", "SWEET", "RYDER", "BIG", "SMOKE", "CESAR", 
+character_names <- c("CJ", "CARL", "SWEET", "RYDER", "BIG SMOKE", "CESAR", 
                     "KENDL", "WOOZIE", "CATALINA", "TENPENNY", "PULASKI", 
-                    "ZERO", "TRUTH", "TORENO", "MADD", "DOGG")
+                    "ZERO", "TRUTH", "TORENO", "MADD DOGG")
 
 character_names_lower <- tolower(character_names)
 filtered_stop_words <- stop_words %>%
@@ -115,6 +221,35 @@ gta_script %>%
   xlab(NULL) +
   ylab("Frecuencia") +
   ggtitle("GTA SA: Conteo de Palabras")
+```
+
+### Filtrado de contenido ofensivo/violento (según lexicones)
+```{r offensive-filter}
+# Usar NRC (emociones negativas fuertes) y AFINN (valores muy negativos)
+cat("Usando lexicones NRC y AFINN para filtrar términos ofensivos/violentos...\n")
+
+nrc_negative <- get_sentiments("nrc") %>%
+  filter(sentiment %in% c("anger", "disgust", "fear")) %>%
+  select(word)
+
+afinn_negative <- get_sentiments("afinn") %>%
+  filter(value <= -3) %>%
+  select(word)
+
+offensive_words <- bind_rows(nrc_negative, afinn_negative) %>%
+  distinct(word) %>%
+  # Excluir nombres de personajes
+  filter(!tolower(word) %in% tolower(character_names))
+
+cat("Términos marcados para filtrar:", nrow(offensive_words), "\n")
+cat("Tokens antes del filtrado:", nrow(gta_script), "\n")
+
+gta_script %<>% anti_join(offensive_words, by = "word")
+
+cat("Tokens después del filtrado:", nrow(gta_script), "\n")
+
+# Vista rápida de términos frecuentes luego del filtrado
+gta_script %>% count(word, sort = TRUE) %>% head(10) %>% knitr::kable()
 ```
 
 El conteo de palabras por personaje permite observar qué tan central es cada figura dentro de la narrativa del juego. Analizar el vocabulario individual muestra diferencias en estilo, frecuencia de aparición y relevancia dentro de la historia. 
@@ -147,7 +282,7 @@ La nube de palabras ofrece una forma visual de entender esas frecuencias: los t�
 
 ### Frecuencia de palabras por personaje
 ```{r character-frequency}
-# Función para identificar personajes principales
+# Función para identificar personajes principales (ampliada)
 get_main_characters <- function(word){
   word_upper <- toupper(word)
   case_when(
@@ -155,8 +290,16 @@ get_main_characters <- function(word){
     word_upper == "SWEET" ~ "sweet",
     word_upper == "RYDER" ~ "ryder",
     word_upper == "CESAR" ~ "cesar",
-    word_upper == "BIG" ~ "big_smoke",  
-    word_upper == "SMOKE" ~ "big_smoke",
+    word_upper == "KENDL" ~ "kendl",
+    word_upper %in% c("BIG SMOKE") ~ "big_smoke",
+    word_upper == "CATALINA" ~ "catalina",
+    word_upper == "WOOZIE" ~ "woozie",
+    word_upper == "TENPENNY" ~ "tenpenny",
+    word_upper == "PULASKI" ~ "pulaski",
+    word_upper == "TRUTH" ~ "truth",
+    word_upper == "TORENO" ~ "toreno",
+    word_upper %in% c("MADD DOGG") ~ "madd_dogg",
+    word_upper == "ZERO" ~ "zero",
     TRUE ~ NA_character_
   )
 }
@@ -178,11 +321,21 @@ create_character_dataset <- function(character_name){
     select(word)
 }
 
+# Crear datasets para todos los personajes
 script_cj <- create_character_dataset("cj")
 script_sweet <- create_character_dataset("sweet")
 script_ryder <- create_character_dataset("ryder")
 script_cesar <- create_character_dataset("cesar")
+script_kendl <- create_character_dataset("kendl")
 script_big_smoke <- create_character_dataset("big_smoke")
+script_catalina <- create_character_dataset("catalina")
+script_woozie <- create_character_dataset("woozie")
+script_tenpenny <- create_character_dataset("tenpenny")
+script_pulaski <- create_character_dataset("pulaski")
+script_truth <- create_character_dataset("truth")
+script_toreno <- create_character_dataset("toreno")
+script_madd_dogg <- create_character_dataset("madd_dogg")
+script_zero <- create_character_dataset("zero")
 
 # Mostrar conteo de palabras por personaje
 cat("Palabras por personaje:\n")
@@ -421,6 +574,589 @@ La red de palabras con un umbral bajo (2) incluye muchas más conexiones, lo que
 
 En este caso, el gráfico refleja un panorama más amplio de las asociaciones posibles, mostrando cómo los diferentes temas del juego —como familia, pandillas, policía o negocios— terminan entrelazándose. Aunque aparecen más relaciones débiles, esta perspectiva ayuda a comprender la complejidad del guion y cómo múltiples conceptos se conectan en la narrativa de GTA: San Andreas. 
 
+### Centralidad en la red de palabras (bigramas)
+```{r centrality-words, fig.height=8, fig.width=12, out.width="100%"}
+# Crear grafo de bigramas para medidas de centralidad (sin umbral)
+bigram_graph <- gta_bigram_counts %>%
+  select(word1, word2, weight) %>%
+  graph_from_data_frame(directed = FALSE)
+
+# 1) Closeness
+closeness_centrality <- closeness(bigram_graph, mode = "all", normalized = TRUE)
+closeness_df <- data.frame(
+  word = names(closeness_centrality),
+  closeness = as.numeric(closeness_centrality),
+  stringsAsFactors = FALSE
+) %>% arrange(desc(closeness)) %>% head(15)
+
+p_closeness <- ggplot(closeness_df, aes(x = reorder(word, closeness), y = closeness, fill = closeness)) +
+  geom_col(show.legend = FALSE) +
+  scale_fill_viridis_c(option = "plasma") +
+  coord_flip() +
+  labs(title = "Centralidad de Cercanía - Top 15", x = "Palabra", y = "Closeness (norm)") +
+  theme_minimal()
+
+# 2) Betweenness
+betweenness_centrality <- betweenness(bigram_graph, directed = FALSE, normalized = TRUE)
+betweenness_df <- data.frame(
+  word = names(betweenness_centrality),
+  betweenness = as.numeric(betweenness_centrality)
+) %>% arrange(desc(betweenness)) %>% head(15)
+
+p_betweenness <- ggplot(betweenness_df, aes(x = reorder(word, betweenness), y = betweenness, fill = betweenness)) +
+  geom_col(show.legend = FALSE) +
+  scale_fill_viridis_c(option = "inferno") +
+  coord_flip() +
+  labs(title = "Centralidad de Intermediación - Top 15", x = "Palabra", y = "Betweenness (norm)") +
+  theme_minimal()
+
+# 3) Degree
+degree_centrality <- degree(bigram_graph, mode = "all", normalized = TRUE)
+degree_df <- data.frame(
+  word = names(degree_centrality),
+  degree = as.numeric(degree_centrality)
+) %>% arrange(desc(degree)) %>% head(15)
+
+p_degree <- ggplot(degree_df, aes(x = reorder(word, degree), y = degree, fill = degree)) +
+  geom_col(show.legend = FALSE) +
+  scale_fill_viridis_c(option = "cividis") +
+  coord_flip() +
+  labs(title = "Centralidad de Grado - Top 15", x = "Palabra", y = "Degree (norm)") +
+  theme_minimal()
+
+# 4) Eigenvector
+eigen_centrality_vec <- eigen_centrality(bigram_graph, directed = FALSE)
+eigen_df <- data.frame(
+  word = names(eigen_centrality_vec$vector),
+  eigenvector = as.numeric(eigen_centrality_vec$vector)
+) %>% arrange(desc(eigenvector)) %>% head(15)
+
+p_eigen <- ggplot(eigen_df, aes(x = reorder(word, eigenvector), y = eigenvector, fill = eigenvector)) +
+  geom_col(show.legend = FALSE) +
+  scale_fill_viridis_c(option = "mako") +
+  coord_flip() +
+  labs(title = "Centralidad de Vector Propio - Top 15", x = "Palabra", y = "Eigenvector") +
+  theme_minimal()
+
+gridExtra::grid.arrange(p_closeness, p_betweenness, p_degree, p_eigen, ncol = 1)
+```
+
+### Cohesión de la red (palabras)
+```{r cohesion-words}
+network_density <- edge_density(bigram_graph)
+transitivity_global <- transitivity(bigram_graph, type = "global")
+transitivity_local <- transitivity(bigram_graph, type = "local")
+components_list <- components(bigram_graph)
+num_components <- components_list$no
+component_sizes <- components_list$csize
+
+gc_nodes <- which(components_list$membership == which.max(component_sizes))
+gc_subgraph <- induced_subgraph(bigram_graph, gc_nodes)
+network_diameter <- diameter(gc_subgraph)
+avg_path_length <- mean_distance(gc_subgraph)
+assortativity_degree_val <- assortativity_degree(bigram_graph)
+
+cat("Resumen de cohesión de red (palabras):\n\n")
+print(data.frame(
+  Densidad = round(network_density, 4),
+  Transitividad_Global = round(transitivity_global, 4),
+  Componentes = num_components,
+  Diametro = network_diameter,
+  Camino_Promedio = round(avg_path_length, 4),
+  Asortatividad_Grado = round(assortativity_degree_val, 4)
+))
+
+# Top clustering local
+clustering_df <- data.frame(
+  word = names(transitivity_local),
+  local_clustering = transitivity_local
+) %>% filter(!is.na(local_clustering)) %>% arrange(desc(local_clustering)) %>% head(20)
+
+ggplot(clustering_df, aes(x = reorder(word, local_clustering), y = local_clustering, fill = local_clustering)) +
+  geom_col() + coord_flip() + theme_minimal() +
+  scale_fill_viridis_c(option = "mako", direction = -1) +
+  labs(title = "Top 20 por Clustering Local", x = "Palabra", y = "Clustering")
+```
+
+### Clustering (comunidades) en la red de palabras
+```{r clustering-words}
+# Algoritmos de comunidades
+comunidades_louvain <- cluster_louvain(bigram_graph)
+comunidades_labelprop <- cluster_label_prop(bigram_graph)
+comunidades_walktrap <- cluster_walktrap(bigram_graph, steps = 4)
+
+comparison_algorithms <- data.frame(
+  Algoritmo = c("Louvain", "Label Propagation", "Walktrap"),
+  Num_Comunidades = c(length(comunidades_louvain), length(comunidades_labelprop), length(comunidades_walktrap)),
+  Modularidad = round(c(
+    modularity(bigram_graph, membership(comunidades_louvain)),
+    modularity(bigram_graph, membership(comunidades_labelprop)),
+    modularity(bigram_graph, membership(comunidades_walktrap))
+  ), 4)
+)
+
+knitr::kable(comparison_algorithms, caption = "Comparación de algoritmos de comunidades")
+
+# Visualización por comunidad (Louvain)
+layout_fr <- layout_with_fr(bigram_graph, niter = 300)
+colors_comm <- rainbow(length(comunidades_louvain))
+vertex_cols <- colors_comm[membership(comunidades_louvain)]
+
+plot(bigram_graph,
+     layout = layout_fr,
+     vertex.size = 3,
+     vertex.label = NA,
+     vertex.color = vertex_cols,
+     vertex.frame.color = NA,
+     edge.width = 0.2,
+     edge.color = rgb(0,0,0,0.05),
+     main = "Red de Palabras por Comunidades (Louvain)")
+```
+
+## Análisis de Red de Personajes e Interacciones
+
+Este bloque replica y amplía el análisis de `main.R` para construir redes entre personajes a partir de coapariciones por línea y clasificarlas por tipo de interacción (misión, conversación, conflicto).
+
+```{r character-network}
+# Lista ampliada de personajes principales
+main_characters <- c(
+  "CJ",                   # Protagonista (unifica CJ y CARL)
+  "SWEET",                # Hermano de CJ
+  "CESAR",                # Cuñado de CJ
+  "KENDL",                # Hermana de CJ
+  "RYDER",                # Amigo/traidor
+  "BIG SMOKE",            # Amigo/traidor principal
+  "CATALINA",             # Novia loca
+  "WOOZIE",               # Líder de las Triadas
+  "TENPENNY",             # Policía corrupto principal
+  "PULASKI",              # Policía corrupto
+  "TRUTH",                # Hippie conspiracionista
+  "TORENO",               # Agente gubernamental
+  "MADD DOGG",            # Rapero
+  "ZERO"                  # Ingeniero/técnico
+)
+
+# Función para detectar coapariciones por línea
+find_character_mentions <- function(text, characters) {
+  mentions <- matrix(0, nrow = length(characters), ncol = length(characters))
+  rownames(mentions) <- characters
+  colnames(mentions) <- characters
+  text <- toupper(text)
+  for(i in seq_along(text)) {
+    present_chars <- characters[sapply(characters, function(x) grepl(x, text[i]))]
+    if(length(present_chars) > 1) {
+      for(j in 1:(length(present_chars)-1)) {
+        for(k in (j+1):length(present_chars)) {
+          mentions[present_chars[j], present_chars[k]] <- mentions[present_chars[j], present_chars[k]] + 1
+          mentions[present_chars[k], present_chars[j]] <- mentions[present_chars[k], present_chars[j]] + 1
+        }
+      }
+    }
+  }
+  mentions
+}
+
+gta_script_raw <- read_lines("guionGTA.txt")
+
+# Unificar variantes de nombres de personajes
+gta_script_raw <- str_replace_all(gta_script_raw, "\\bCARL\\b", "CJ")
+
+adjacency_matrix <- find_character_mentions(gta_script_raw, main_characters)
+
+character_graph <- graph_from_adjacency_matrix(adjacency_matrix, mode = "undirected", weighted = TRUE)
+
+# Métricas básicas
+print(list(
+  densidad = edge_density(character_graph),
+  diametro = diameter(character_graph),
+  camino_promedio = mean_distance(character_graph),
+  clustering_global = transitivity(character_graph)
+))
+
+set.seed(123)
+plot(character_graph,
+     vertex.color = "#335f3f",
+     vertex.size = 30,
+     vertex.label.color = "white",
+     vertex.label.cex = 0.8,
+     edge.width = E(character_graph)$weight/5,
+     main = "Red de Interacciones entre Personajes - GTA SA")
+```
+
+### Interacciones por tipo (misión, conversación, conflicto)
+```{r character-interactions}
+classify_interactions <- function(text) {
+  mission_keywords <- c("MISSION", "OBJECTIVE", "TASK", "GO", "GET", "BRING", "FIND", 
+                        "COMPLETE", "FINISH", "START", "BEGIN", "DO")
+  conversation_keywords <- c("TALK", "SAY", "TELL", "SPEAK", "ASK", "ANSWER", 
+                             "CHAT", "DISCUSS", "EXPLAIN", "MENTION", "REPLY")
+  conflict_keywords <- c("FIGHT", "KILL", "SHOOT", "ATTACK", "ANGRY", "MAD",
+                         "HATE", "ENEMY", "BATTLE", "WAR", "VIOLENCE", "GANG")
+  txt <- toupper(text)
+  case_when(
+    any(sapply(mission_keywords, grepl, x = txt)) ~ "MISSION",
+    any(sapply(conversation_keywords, grepl, x = txt)) ~ "CONVERSATION",
+    any(sapply(conflict_keywords, grepl, x = txt)) ~ "CONFLICT",
+    TRUE ~ "OTHER"
+  )
+}
+
+create_typed_mentions <- function(text, characters, interaction_type) {
+  mentions <- matrix(0, nrow = length(characters), ncol = length(characters))
+  rownames(mentions) <- characters
+  colnames(mentions) <- characters
+  text <- toupper(text)
+  for(i in seq_along(text)) {
+    if(classify_interactions(text[i]) == interaction_type) {
+      present_chars <- characters[sapply(characters, function(x) grepl(x, text[i]))]
+      if(length(present_chars) > 1) {
+        for(j in 1:(length(present_chars)-1)) {
+          for(k in (j+1):length(present_chars)) {
+            mentions[present_chars[j], present_chars[k]] <- mentions[present_chars[j], present_chars[k]] + 1
+            mentions[present_chars[k], present_chars[j]] <- mentions[present_chars[k], present_chars[j]] + 1
+          }
+        }
+      }
+    }
+  }
+  mentions
+}
+
+mission_graph <- graph_from_adjacency_matrix(create_typed_mentions(gta_script_raw, main_characters, "MISSION"), mode = "undirected", weighted = TRUE)
+conversation_graph <- graph_from_adjacency_matrix(create_typed_mentions(gta_script_raw, main_characters, "CONVERSATION"), mode = "undirected", weighted = TRUE)
+conflict_graph <- graph_from_adjacency_matrix(create_typed_mentions(gta_script_raw, main_characters, "CONFLICT"), mode = "undirected", weighted = TRUE)
+
+par(mfrow = c(1,3), mar = c(1,1,2,1))
+plot(mission_graph, vertex.color = "#335f3f", vertex.size = 22, vertex.label.color = "white", edge.width = pmax(1, E(mission_graph)$weight/3), main = "Misiones")
+plot(conversation_graph, vertex.color = "#335f3f", vertex.size = 22, vertex.label.color = "white", edge.width = pmax(1, E(conversation_graph)$weight/3), main = "Conversaciones")
+plot(conflict_graph, vertex.color = "#335f3f", vertex.size = 22, vertex.label.color = "white", edge.width = pmax(1, E(conflict_graph)$weight/3), main = "Conflictos")
+par(mfrow = c(1,1))
+
+# Métricas por tipo
+calc_metrics <- function(g){
+  data.frame(
+    character = V(g)$name,
+    degree = degree(g),
+    betweenness = betweenness(g),
+    closeness = closeness(g),
+    eigenvector = eigen_centrality(g)$vector
+  )
+}
+
+knitr::kable(calc_metrics(character_graph) %>% arrange(desc(degree)) %>% head(10), caption = "Top 10 Personajes - Red General (grado)")
+
+### Matriz de adyacencia de interacciones entre personajes
+```{r character-adjacency}
+# Convertir la matriz de adyacencia a data frame para visualización ordenada
+adj_df <- as.data.frame(adjacency_matrix)
+adj_df <- tibble(personaje = rownames(adjacency_matrix)) %>% bind_cols(adj_df)
+
+# Mostrar tabla compacta con estilo personalizado
+knitr::kable(
+  adj_df, 
+  caption = "Matriz de Adyacencia - Coapariciones por Línea entre Personajes",
+  align = c('l', rep('c', ncol(adj_df) - 1)),
+  format = "html"
+) %>%
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+    full_width = FALSE,
+    position = "center",
+    font_size = 11
+  ) %>%
+  kableExtra::column_spec(1, bold = TRUE, width = "8em") %>%
+  kableExtra::scroll_box(width = "100%", height = "500px")
+
+# Exportar también a CSV para uso externo
+write.csv(adj_df, "character_interactions_adjacency.csv", row.names = FALSE)
+cat("✓ Exportado: character_interactions_adjacency.csv\n")
+```
+
+### Heatmap de la Matriz de Adyacencia
+```{r character-adjacency-heatmap, fig.height=10, fig.width=12}
+# Reutilizar función si no existe (para robustez cuando se ejecuta chunk aislado)
+if(!exists("find_character_mentions")) {
+  find_character_mentions <- function(text, characters) {
+    mentions <- matrix(0, nrow = length(characters), ncol = length(characters))
+    rownames(mentions) <- characters
+    colnames(mentions) <- characters
+    text <- toupper(text)
+    for(i in seq_along(text)) {
+      present_chars <- characters[sapply(characters, function(x) grepl(x, text[i]))]
+      if(length(present_chars) > 1) {
+        for(j in 1:(length(present_chars)-1)) {
+          for(k in (j+1):length(present_chars)) {
+            mentions[present_chars[j], present_chars[k]] <- mentions[present_chars[j], present_chars[k]] + 1
+            mentions[present_chars[k], present_chars[j]] <- mentions[present_chars[k], present_chars[j]] + 1
+          }
+        }
+      }
+    }
+    return(mentions)
+  }
+}
+
+# Asegurar líneas crudas del guion
+raw_lines <- read_lines("guionGTA.txt")
+adjacency_matrix <- find_character_mentions(raw_lines, main_characters)
+matrix_data <- adjacency_matrix
+
+if(requireNamespace("pheatmap", quietly = TRUE)) {
+  pheatmap::pheatmap(
+    matrix_data,
+    color = colorRampPalette(c("#FFFFFF", "#E8F5E9", "#A5D6A7", "#4CAF50", "#2E7D32"))(100),
+    main = "Matriz de Adyacencia - Interacciones entre Personajes",
+    fontsize = 12,
+    fontsize_row = 12,
+    fontsize_col = 12,
+    cluster_rows = FALSE,
+    cluster_cols = FALSE,
+    display_numbers = TRUE,
+    number_color = "black",
+    border_color = "grey60",
+    cellwidth = 30,
+    cellheight = 30
+  )
+} else {
+  # Fallback simple si pheatmap no está instalado
+  image(matrix_data,
+        main = "Matriz de Adyacencia (fallback sin pheatmap)",
+        col = colorRampPalette(c("#FFFFFF", "#E8F5E9", "#A5D6A7", "#4CAF50", "#2E7D32"))(50),
+        axes = FALSE)
+  axis(1, at = seq(0,1,length.out = ncol(matrix_data)), labels = colnames(matrix_data), las = 2, cex.axis = 0.6)
+  axis(2, at = seq(0,1,length.out = nrow(matrix_data)), labels = rownames(matrix_data), las = 2, cex.axis = 0.6)
+}
+
+# Exportar nuevamente (heatmap puede haber re-generado la matriz)
+adj_df_heat <- tibble(personaje = rownames(matrix_data)) %>% bind_cols(as.data.frame(matrix_data))
+write.csv(adj_df_heat, "character_interactions_adjacency.csv", row.names = FALSE)
+cat("✓ Heatmap generado y matriz exportada: character_interactions_adjacency.csv\n")
+
+cat("\n### Interpretación de la Matriz de Adyacencia\n\n")
+cat("* Los números en cada celda representan la cantidad de coapariciones por línea entre dos personajes.\n")
+cat("* La intensidad del color verde indica la mayor frecuencia de interacción.\n")
+cat("* La matriz es simétrica: interacción A-B es igual a B-A.\n")
+cat("* La diagonal principal se omite (no auto-interacciones).\n")
+cat("* Valores altos pueden indicar escenas compartidas recurrentes o vínculos narrativos fuertes.\n")
+```
+```
+
+### Red Interactiva de Interacciones entre Personajes
+```{r interactive-character-network, eval=TRUE}
+if (requireNamespace("networkD3", quietly = TRUE)) {
+  library(networkD3)
+  library(htmltools)
+  
+  # Usar la matriz de adyacencia ya calculada
+  if (!exists("adjacency_matrix")) {
+    raw_lines <- read_lines("guionGTA.txt")
+    adjacency_matrix <- find_character_mentions(raw_lines, main_characters)
+  }
+  
+  # Crear grafo desde la matriz
+  char_graph <- graph_from_adjacency_matrix(adjacency_matrix, mode = "undirected", weighted = TRUE)
+  
+  # Convertir a formato networkD3
+  char_d3 <- igraph_to_networkD3(char_graph)
+  
+  # Calcular métricas para tamaño y agrupación
+  deg <- degree(char_graph, mode = "all")
+  betw <- betweenness(char_graph, directed = FALSE)
+  
+  node_metrics <- tibble(
+    name = V(char_graph)$name,
+    degree = as.numeric(deg),
+    betweenness = as.numeric(betw)
+  )
+  
+  # Enriquecer nodos con métricas
+  char_d3$nodes <- char_d3$nodes %>%
+    mutate(name = as.character(name)) %>%
+    left_join(node_metrics, by = "name") %>%
+    mutate(
+      degree = replace_na(degree, 0),
+      betweenness = replace_na(betweenness, 0),
+      # Tamaño basado en grado (más conexiones = más grande)
+      size = 15 + ifelse(max(degree) > 0, 25 * degree / max(degree), 0),
+      # Grupo basado en betweenness (centralidad de intermediación)
+      group = ifelse(max(betweenness) > 0, 
+                    1 + floor(3 * betweenness / max(betweenness)), 
+                    1)
+    )
+  
+  # Ajustar pesos de enlaces (normalizar para visualización)
+  char_d3$links <- char_d3$links %>%
+    mutate(value = pmax(1, value / 3))
+  
+  # Crear visualización interactiva
+  viz_characters <- forceNetwork(
+    Links = char_d3$links,
+    Nodes = char_d3$nodes,
+    Source = "source",
+    Target = "target",
+    NodeID = "name",
+    Group = "group",
+    Nodesize = "size",
+    Value = "value",
+    opacity = 0.95,
+    fontSize = 18,
+    zoom = TRUE,
+    linkDistance = 150,
+    charge = -500,
+    linkWidth = 2,
+    linkColour = "#66666680",
+    bounded = FALSE,
+    legend = TRUE,
+    opacityNoHover = 1,
+    fontFamily = "Arial, sans-serif"
+  )
+  
+  # Guardar archivo independiente
+  saveNetwork(viz_characters, "interactive_character_interactions.html")
+  message("✓ Guardado interactive_character_interactions.html")
+  
+  # Mostrar con título y descripción
+  tagList(
+    tags$h3("Red Interactiva de Interacciones entre Personajes"),
+    tags$p(paste0(
+      "Visualización de ", nrow(char_d3$nodes), " personajes principales con ",
+      nrow(char_d3$links), " conexiones. El tamaño del nodo representa el número de interacciones ",
+      "totales, y el grosor de las líneas indica la frecuencia de coapariciones."
+    )),
+    viz_characters
+  )
+} else {
+  cat("**networkD3 no disponible:** Para visualizar la red interactiva, instala el paquete con `install.packages('networkD3')`\n")
+}
+```
+
+## Análisis Skipgram (ventanas de contexto)
+
+Para evitar tiempos de cómputo elevados, se incluye un límite opcional de tokens. Ajuste `max_tokens` según recursos disponibles.
+
+```{r skipgram, warning=FALSE}
+max_tokens <- Inf  # Puede fijarse, por ejemplo, a 15000 para acelerar
+
+gta_skipgram_indexed <- gta_script %>%
+  select(word) %>%
+  mutate(word_id = row_number()) %>%
+  { if(is.finite(max_tokens)) dplyr::slice(., 1:min(n(), max_tokens)) else . }
+
+window_size <- 4
+gta_skipgrams <- gta_skipgram_indexed %>%
+  mutate(window_start = pmax(1, word_id - window_size),
+         window_end   = pmin(n(), word_id + window_size))
+
+skipgram_pairs <- purrr::map_dfr(seq_len(nrow(gta_skipgrams)), function(i){
+  focus <- gta_skipgrams$word[i]
+  rng <- gta_skipgrams$window_start[i]:gta_skipgrams$window_end[i]
+  rng <- rng[rng != i]
+  tibble(focus_word = focus, context_word = gta_skipgrams$word[rng], distance = abs(i - rng))
+})
+
+skipgram_weighted <- skipgram_pairs %>%
+  mutate(weight = 1 / distance) %>%
+  group_by(focus_word, context_word) %>%
+  summarise(total_weight = sum(weight), count = n(), mean_distance = mean(distance), .groups = 'drop') %>%
+  arrange(desc(total_weight))
+
+head(skipgram_weighted, 20) %>% knitr::kable(caption = "Top 20 skipgrams por peso")
+```
+
+### Red de Skipgrams Interactiva
+```{r interactive-skipgram, eval=TRUE}
+if (requireNamespace("networkD3", quietly = TRUE)) {
+  library(networkD3)
+  library(htmltools)
+  
+  # Umbral local (usa el existente si está definido)
+  th <- if (exists("threshold")) threshold else 10
+  
+  # Preparar datos de aristas
+  sg_df <- skipgram_weighted %>%
+    filter(total_weight > th) %>%
+    transmute(source = focus_word, target = context_word, value = total_weight)
+  
+  if (nrow(sg_df) > 0) {
+    # Grafo y conversión a networkD3
+    sg_graph <- graph_from_data_frame(sg_df, directed = TRUE)
+    sg_d3 <- igraph_to_networkD3(sg_graph)
+    
+    # Tamaño basado en fuerza saliente y agrupar por betweenness
+    out_w <- strength(sg_graph, mode = "out")
+    betw <- betweenness(sg_graph, directed = TRUE)
+    
+    node_map <- tibble(
+      name = igraph::V(sg_graph)$name, 
+      out_weight = as.numeric(out_w),
+      betweenness = as.numeric(betw)
+    )
+    
+    sg_d3$nodes <- sg_d3$nodes %>%
+      mutate(name = as.character(name)) %>%
+      left_join(node_map, by = "name") %>%
+      mutate(
+        out_weight = replace_na(out_weight, 0),
+        betweenness = replace_na(betweenness, 0),
+        size = 6 + ifelse(max(out_weight) > 0, 20 * out_weight / max(out_weight), 0),
+        group = ifelse(max(betweenness) > 0, 
+                      1 + floor(4 * betweenness / max(betweenness)), 
+                      1)
+      )
+    
+    # Escalar pesos de enlaces
+    sg_d3$links <- sg_d3$links %>% 
+      mutate(value = pmax(0.8, value / 8))
+    
+    # Visualización interactiva con título
+    viz <- forceNetwork(
+      Links = sg_d3$links, 
+      Nodes = sg_d3$nodes,
+      Source = "source", 
+      Target = "target", 
+      NodeID = "name",
+      Group = "group", 
+      Nodesize = "size", 
+      Value = "value",
+      opacity = 0.9, 
+      fontSize = 16, 
+      zoom = TRUE,
+      linkDistance = 90, 
+      charge = -350, 
+      linkWidth = 1.3,
+      linkColour = "#88888880",
+      bounded = FALSE,
+      legend = FALSE,
+      opacityNoHover = 1,
+      fontFamily = "Arial, sans-serif"
+    )
+    
+    saveNetwork(viz, "interactive_skipgram.html")
+    message("✓ Guardado interactive_skipgram.html")
+    
+    # Retornar con título para visualización en el documento
+    tagList(
+      tags$h3("Red Interactiva de Skipgrams"),
+      tags$p(paste0("Visualización interactiva de ", nrow(sg_d3$nodes), 
+                    " palabras con ", nrow(sg_d3$links), 
+                    " conexiones contextuales (umbral = ", th, ")")),
+      viz
+    )
+  } else {
+    tagList(
+      tags$h3("Red Interactiva de Skipgrams"),
+      tags$p(tags$em(paste0(
+        "No hay suficientes aristas por encima del umbral (", th, 
+        ") para generar la visualización interactiva. ",
+        "Intenta reducir el umbral o aumentar max_tokens."
+      )))
+    )
+  }
+} else {
+  cat("**networkD3 no disponible:** Se omite la visualización interactiva de skipgrams.\n\n")
+  cat("Para habilitar esta función, instala el paquete con: `install.packages('networkD3')`\n")
+}
+```
 
 ## Conclusión 
 El conjunto de análisis presentados permite comprender de manera más profunda el lenguaje y los temas que estructuran GTA: San Andreas. Desde la frecuencia de palabras hasta las redes de asociaciones, los resultados muestran cómo la narrativa se construye alrededor de la violencia, las pandillas, el dinero y el poder, pero también incorpora elementos de familia, amistad y pertenencia. Estas técnicas no solo evidencian los patrones del guion, sino que también ofrecen una mirada crítica sobre el trasfondo social y cultural que inspira la historia del juego.
