@@ -1,0 +1,35 @@
+---
+title: "Preview - Introducción"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, eval=FALSE)
+```
+
+## Introducción
+El análisis de frecuencia de palabras en un corpus textual, como los diálogos y guiones de GTA: San Andreas, permite observar patrones lingüísticos que reflejan tanto el diseño narrativo del juego como la construcción de sus personajes y escenarios.
+
+Más allá de la simple aparición de términos, el estudio de sus conexiones ofrece una ventana para comprender qué conceptos se relacionan entre sí, revelando conexiones semánticas y temáticas que fortalecen la ambientación y el mensaje narrativo.
+
+En este contexto, el uso de técnicas estadísticas y de conteo sistemático brinda una forma objetiva de explorar un universo cultural y narrativo tan amplio como el de este videojuego.
+
+### Justificación
+
+El análisis de texto aplicado a GTA: San Andreas resulta relevante porque permite transformar un producto de entretenimiento en un objeto de investigación cuantitativa.
+
+Mientras que la experiencia del jugador se centra en lo narrativo y lo visual, el estudio de la frecuencia y correlación de palabras ofrece una visión estructurada y replicable del trasfondo lingüístico del juego.
+
+Además, este enfoque no requiere herramientas de inteligencia artificial complejas: con técnicas de conteo, minería de texto y análisis de redes, es posible generar evidencia empírica clara y accesible que enriquezca la interpretación del guion del juego.
+
+### Objetivos
+
+- Detectar y cuantificar la frecuencia de términos clave dentro del corpus textual de GTA: San Andreas.
+
+- Identificar relaciones entre palabras para revelar patrones narrativos y temáticos.
+
+- Presentar los resultados mediante gráficos y visualizaciones que faciliten la interpretación de los datos.

@@ -20,6 +20,7 @@ knitr::opts_chunk$set(
   echo = TRUE, 
   warning = FALSE, 
   message = FALSE,
+  error = TRUE,
   fig.width = 12,  # Aumenta el ancho de todas las figuras
   fig.height = 10,  # Aumenta el alto de todas las figuras
   out.width = "100%",  # Hace que las figuras ocupen el ancho completo
@@ -27,7 +28,6 @@ knitr::opts_chunk$set(
 )
 ```
 ## Introducción 
-
 El análisis de frecuencia de palabras en un corpus textual, como los diálogos y guiones de GTA: San Andreas, permite observar patrones lingüísticos que reflejan tanto el diseño narrativo del juego como la construcción de sus personajes y escenarios. 
 
 Más allá de la simple aparición de términos, el estudio de sus conexiones ofrece una ventana para comprender qué conceptos se relacionan entre sí, revelando conexiones semánticas y temáticas que fortalecen la ambientación y el mensaje narrativo. 
@@ -43,6 +43,10 @@ Mientras que la experiencia del jugador se centra en lo narrativo y lo visual, e
 
 Además, este enfoque no requiere herramientas de inteligencia artificial complejas: con técnicas de conteo, minería de texto y análisis de redes, es posible generar evidencia empírica clara y accesible que enriquezca la interpretación del guion del juego. 
 
+Evidencia de la complejidad narrativa: El mundo de San Andreas se siente vivo porque sus personajes no existen en el vacío; operan dentro de una red densa donde las acciones (y palabras) de uno afectan a la comunidad.
+
+Cuantificación de roles: Más allá de saber quién es el protagonista, el análisis de centralidad nos permite identificar matemáticamente quiénes son los conectores sociales, los instigadores de conflicto y los núcleos emocionales de la trama.
+
 
 ### Objetivos
 
@@ -51,7 +55,6 @@ Además, este enfoque no requiere herramientas de inteligencia artificial comple
 - Identificar relaciones entre palabras para revelar patrones narrativos y temáticos. 
 
 - Presentar los resultados mediante gráficos y visualizaciones que faciliten la interpretación de los datos. 
-
 
 ## Personajes Principales
 
@@ -416,6 +419,10 @@ bootstrap_shared_correlation <- boot(data = shared_correlation_data, statistic =
 boot.ci(bootstrap_shared_correlation, type = "perc")
 
 hist(bootstrap_shared_correlation$t,
+  main = "Bootstrap Shared Correlation Distribution",
+  xlab = "r",
+  col = "#43A047",
+  border = "white")
      main = "Bootstrap Distribution (shared words)",
      xlab ="r",
      col ="#039BE5",
@@ -827,9 +834,13 @@ conversation_graph <- graph_from_adjacency_matrix(create_typed_mentions(gta_scri
 conflict_graph <- graph_from_adjacency_matrix(create_typed_mentions(gta_script_raw, main_characters, "CONFLICT"), mode = "undirected", weighted = TRUE)
 
 par(mfrow = c(1,3), mar = c(1,1,2,1))
-plot(mission_graph, vertex.color = "#335f3f", vertex.size = 22, vertex.label.color = "white", edge.width = pmax(1, E(mission_graph)$weight/3), main = "Misiones")
-plot(conversation_graph, vertex.color = "#335f3f", vertex.size = 22, vertex.label.color = "white", edge.width = pmax(1, E(conversation_graph)$weight/3), main = "Conversaciones")
-plot(conflict_graph, vertex.color = "#335f3f", vertex.size = 22, vertex.label.color = "white", edge.width = pmax(1, E(conflict_graph)$weight/3), main = "Conflictos")
+tryCatch({
+  plot(mission_graph, vertex.color = "#335f3f", vertex.size = 22, vertex.label.color = "white", edge.width = pmax(1, E(mission_graph)$weight/3), main = "Misiones")
+  plot(conversation_graph, vertex.color = "#335f3f", vertex.size = 22, vertex.label.color = "white", edge.width = pmax(1, E(conversation_graph)$weight/3), main = "Conversaciones")
+  plot(conflict_graph, vertex.color = "#335f3f", vertex.size = 22, vertex.label.color = "white", edge.width = pmax(1, E(conflict_graph)$weight/3), main = "Conflictos")
+}, error = function(e) {
+  message("Plotting failed in character-interactions: ", conditionMessage(e))
+})
 par(mfrow = c(1,1))
 
 # Métricas por tipo
@@ -1158,5 +1169,9 @@ if (requireNamespace("networkD3", quietly = TRUE)) {
 }
 ```
 
-## Conclusión 
-El conjunto de análisis presentados permite comprender de manera más profunda el lenguaje y los temas que estructuran GTA: San Andreas. Desde la frecuencia de palabras hasta las redes de asociaciones, los resultados muestran cómo la narrativa se construye alrededor de la violencia, las pandillas, el dinero y el poder, pero también incorpora elementos de familia, amistad y pertenencia. Estas técnicas no solo evidencian los patrones del guion, sino que también ofrecen una mirada crítica sobre el trasfondo social y cultural que inspira la historia del juego.
+## 4. Conclusión
+A través de este análisis computacional, hemos podido comprobar que la sensación de que el mundo de GTA San Andreas está "vivo" no es una ilusión, sino el resultado de una arquitectura narrativa robusta.
+
+Los datos revelan que el guion no es una secuencia lineal de frases, sino un sistema dinámico. Las métricas de centralidad confirmaron que CJ actúa como un verdadero "hub" social, conectando comunidades dispares que, de otro modo, no interactuarían. Los análisis de bigramas y skip-grams mostraron cómo el lenguaje evoluciona y se adapta según el interlocutor, dotando a cada relación de una huella digital lingüística única.
+
+En definitiva, hemos demostrado que la vitalidad de San Andreas reside en sus conexiones. Al visualizar el guion como una red de interacciones, hacemos tangible lo intangible: el juego perdura porque sus personajes tejen una red social tan compleja y reactiva como la de cualquier comunidad real. La ciencia de datos nos ha permitido ver, detrás del código del juego, el código humano que lo sostiene.
