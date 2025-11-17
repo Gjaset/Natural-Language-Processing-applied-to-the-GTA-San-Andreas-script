@@ -260,7 +260,7 @@ El conteo de palabras por personaje permite observar qué tan central es cada fi
 Cuando se analizan las palabras usadas por cada personaje, aparecen diferencias claras en el estilo y en el rol que cumplen dentro de la historia. Por ejemplo, personajes principales como CJ tienden a tener un vocabulario amplio y relacionado con la acción directa, mientras que otros personajes pueden centrarse en temas más específicos, como negocios, violencia o familia. Este análisis muestra cómo cada voz dentro del juego refuerza su identidad y aporta a la construcción general de la trama. 
 
 
-### Nube de palabras
+## Nube de palabras
 ```{r wordcloud, fig.height=12, fig.width=16, out.width="100%"}
 par(mfrow = c(1,1), mar=c(2,2,4,2), mgp=c(2,1,0))
 set.seed(123)
@@ -582,13 +582,15 @@ La red de palabras con un umbral bajo (2) incluye muchas más conexiones, lo que
 En este caso, el gráfico refleja un panorama más amplio de las asociaciones posibles, mostrando cómo los diferentes temas del juego —como familia, pandillas, policía o negocios— terminan entrelazándose. Aunque aparecen más relaciones débiles, esta perspectiva ayuda a comprender la complejidad del guion y cómo múltiples conceptos se conectan en la narrativa de GTA: San Andreas. 
 
 ### Centralidad en la red de palabras (bigramas)
-```{r centrality-words, fig.height=8, fig.width=12, out.width="100%"}
+
+#### 1. Centralidad de Cercanía (Closeness)
+```{r centrality-closeness, fig.height=6, fig.width=12, out.width="100%"}
 # Crear grafo de bigramas para medidas de centralidad (sin umbral)
 bigram_graph <- gta_bigram_counts %>%
   select(word1, word2, weight) %>%
   graph_from_data_frame(directed = FALSE)
 
-# 1) Closeness
+# Closeness
 closeness_centrality <- closeness(bigram_graph, mode = "all", normalized = TRUE)
 closeness_df <- data.frame(
   word = names(closeness_centrality),
@@ -596,56 +598,63 @@ closeness_df <- data.frame(
   stringsAsFactors = FALSE
 ) %>% arrange(desc(closeness)) %>% head(15)
 
-p_closeness <- ggplot(closeness_df, aes(x = reorder(word, closeness), y = closeness, fill = closeness)) +
+ggplot(closeness_df, aes(x = reorder(word, closeness), y = closeness, fill = closeness)) +
   geom_col(show.legend = FALSE) +
   scale_fill_viridis_c(option = "plasma") +
   coord_flip() +
   labs(title = "Centralidad de Cercanía - Top 15", x = "Palabra", y = "Closeness (norm)") +
   theme_minimal()
+```
 
-# 2) Betweenness
+#### 2. Centralidad de Intermediación (Betweenness)
+```{r centrality-betweenness, fig.height=6, fig.width=12, out.width="100%"}
+# Betweenness
 betweenness_centrality <- betweenness(bigram_graph, directed = FALSE, normalized = TRUE)
 betweenness_df <- data.frame(
   word = names(betweenness_centrality),
   betweenness = as.numeric(betweenness_centrality)
 ) %>% arrange(desc(betweenness)) %>% head(15)
 
-p_betweenness <- ggplot(betweenness_df, aes(x = reorder(word, betweenness), y = betweenness, fill = betweenness)) +
+ggplot(betweenness_df, aes(x = reorder(word, betweenness), y = betweenness, fill = betweenness)) +
   geom_col(show.legend = FALSE) +
   scale_fill_viridis_c(option = "inferno") +
   coord_flip() +
   labs(title = "Centralidad de Intermediación - Top 15", x = "Palabra", y = "Betweenness (norm)") +
   theme_minimal()
+```
 
-# 3) Degree
+#### 3. Centralidad de Grado (Degree)
+```{r centrality-degree, fig.height=6, fig.width=12, out.width="100%"}
+# Degree
 degree_centrality <- degree(bigram_graph, mode = "all", normalized = TRUE)
 degree_df <- data.frame(
   word = names(degree_centrality),
   degree = as.numeric(degree_centrality)
 ) %>% arrange(desc(degree)) %>% head(15)
 
-p_degree <- ggplot(degree_df, aes(x = reorder(word, degree), y = degree, fill = degree)) +
+ggplot(degree_df, aes(x = reorder(word, degree), y = degree, fill = degree)) +
   geom_col(show.legend = FALSE) +
   scale_fill_viridis_c(option = "cividis") +
   coord_flip() +
   labs(title = "Centralidad de Grado - Top 15", x = "Palabra", y = "Degree (norm)") +
   theme_minimal()
+```
 
-# 4) Eigenvector
+#### 4. Centralidad de Vector Propio (Eigenvector)
+```{r centrality-eigenvector, fig.height=6, fig.width=12, out.width="100%"}
+# Eigenvector
 eigen_centrality_vec <- eigen_centrality(bigram_graph, directed = FALSE)
 eigen_df <- data.frame(
   word = names(eigen_centrality_vec$vector),
   eigenvector = as.numeric(eigen_centrality_vec$vector)
 ) %>% arrange(desc(eigenvector)) %>% head(15)
 
-p_eigen <- ggplot(eigen_df, aes(x = reorder(word, eigenvector), y = eigenvector, fill = eigenvector)) +
+ggplot(eigen_df, aes(x = reorder(word, eigenvector), y = eigenvector, fill = eigenvector)) +
   geom_col(show.legend = FALSE) +
   scale_fill_viridis_c(option = "mako") +
   coord_flip() +
   labs(title = "Centralidad de Vector Propio - Top 15", x = "Palabra", y = "Eigenvector") +
   theme_minimal()
-
-gridExtra::grid.arrange(p_closeness, p_betweenness, p_degree, p_eigen, ncol = 1)
 ```
 
 ### Cohesión de la red (palabras)
